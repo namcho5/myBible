@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bible Tracker Mobile</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #27ae60; --today: #fff9c4; --bg: #f4f7f6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); padding: 10px; margin: 0; -webkit-tap-highlight-color: transparent; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 40px; }
+        
+        header { position: sticky; top: 0; background: white; padding-bottom: 10px; border-bottom: 2px solid #eee; z-index: 100; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        
+        /* Fixed for iOS Safari height/appearance */
+        input[type="date"] { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; appearance: none; -webkit-appearance: none; }
+        
+        .prog-area { margin: 10px 0; text-align: center; }
+        .prog-bar-bg { background: #eee; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 5px; }
+        .prog-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.3s; }
+        #stats { font-size: 0.8rem; font-weight: bold; color: var(--primary); }
+
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem; }
+        .btn-today { background: var(--accent); color: white; }
+        .btn-catch { background: var(--primary); color: white; }
+        .btn-reset { background: #e74c3c; color: white; grid-column: span 2; margin-top: 8px; font-size: 0.75rem; padding: 8px; }
+        
+        .day-block { padding: 12px 5px; border-bottom: 1px solid #eee; scroll-margin-top: 220px; }
+        .is-today { background: var(--today); border: 2px solid #f1c40f; border-radius: 8px; }
+        .date-label { font-size: 0.8rem; color: #7f8c8d; font-weight: bold; margin-bottom: 5px; padding-left: 5px; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .item { display: flex; align-items: center; font-size: 0.7rem; background: #fafafa; padding: 8px 4px; border-radius: 6px; border-left: 4px solid #3498db; cursor: pointer; border: 1px solid #eee; border-left-width: 4px; }
+        .item input { width: 20px; height: 20px; margin-right: 6px; flex-shrink: 0; }
+        .done { text-decoration: line-through; color: #bbb !important; }
+        b { color: #2c3e50; font-size: 0.75rem; }
+        .eng-name { color: #7f8c8d; margin-left: 2px; font-size: 0.65rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2 style="text-align:center; margin:0;">📖 Bible Tracker</h2>
+        <div class="prog-area">
+            <div class="prog-bar-bg"><div id="prog-fill" class="prog-fill"></div></div>
+            <div id="stats">0 / 1,189 (0%)</div>
+        </div>
+        <label style="font-size:0.75rem; font-weight:bold; color:#666;">Start Date:</label>
+        <input type="date" id="start-date">
+        <div class="controls">
+            <button class="btn-today" id="today-btn">📍 Today</button>
+            <button class="btn-catch" id="catch-btn">✅ Catch Up</button>
+            <button class="btn-reset" id="reset-btn">⚠️ Reset All</button>
+        </div>
+    </header>
+    <div id="list"></div>
+</div>
+
+<script>
+    const bible = [
+        {n:"Genesis", k:"창", c:50}, {n:"Exodus", k:"출", c:40}, {n:"Leviticus", k:"레", c:27}, {n:"Numbers", k:"민", c:36}, {n:"Deuteronomy", k:"신", c:34},
+        {n:"Joshua", k:"여", c:24}, {n:"Judges", k:"사", c:21}, {n:"Ruth", k:"룻", c:4}, {n:"1 Samuel", k:"삼상", c:31}, {n:"2 Samuel", k:"삼하", c:24},
+        {n:"1 Kings", k:"왕상", c:22}, {n:"2 Kings", k:"왕하", c:25}, {n:"1 Chronicles", k:"대상", c:29}, {n:"2 Chronicles", k:"대하", c:36}, {n:"Ezra", k:"라", c:10},
+        {n:"Nehemiah", k:"느", c:13}, {n:"Esther", k:"더", c:10}, {n:"Job", k:"욥", c:42}, {n:"Psalms", k:"시", c:150}, {n:"Proverbs", k:"잠", c:31},
+        {n:"Ecclesiastes", k:"전도", c:12}, {n:"Song of Songs", k:"아", c:8}, {n:"Isaiah", k:"이사", c:66}, {n:"Jeremiah", k:"예레", c:52}, {n:"Lamentations", k:"애", c:5},
+        {n:"Ezekiel", k:"겔", c:48}, {n:"Daniel", k:"단", c:12}, {n:"Hosea", k:"호", c:14}, {n:"Joel", k:"욜", c:3}, {n:"Amos", k:"암", c:9},
+        {n:"Obadiah", k:"오", c:1}, {n:"Jonah", k:"요나", c:4}, {n:"Micah", k:"미", c:7}, {n:"Nahum", k:"나", c:3}, {n:"Habakkuk", k:"하", c:3},
+        {n:"Zephaniah", k:"습", c:3}, {n:"Haggai", k:"학", c:2}, {n:"Zechariah", k:"슥", c:14}, {n:"Malachi", k:"말", c:4}, {n:"Matthew", k:"마", c:28},
+        {n:"Mark", k:"막", c:16}, {n:"Luke", k:"누", c:24}, {n:"John", k:"요", c:21}, {n:"Acts", k:"행", c:28}, {n:"Romans", k:"롬", c:16},
+        {n:"1 Corin", k:"고전", c:16}, {n:"2 Corin", k:"고후", c:13}, {n:"Galatians", k:"갈", c:6}, {n:"Ephesians", k:"엡", c:6}, {n:"Philippians", k:"빌", c:4},
+        {n:"Colossians", k:"골", c:4}, {n:"1 Thess", k:"살전", c:5}, {n:"2 Thess", k:"살후", c:3}, {n:"1 Timothy", k:"딤전", c:6}, {n:"2 Timothy", k:"딤후", c:4},
+        {n:"Titus", k:"딛", c:3}, {n:"Philemon", k:"몬", c:1}, {n:"Hebrews", k:"히", c:13}, {n:"James", k:"야", c:5}, {n:"1 Peter", k:"벧전", c:5},
+        {n:"2 Peter", k:"벧후", c:3}, {n:"1 John", k:"요일", c:5}, {n:"2 John", k:"요이", c:1}, {n:"3 John", k:"요삼", c:1}, {n:"Jude", k:"유", c:1}, {n:"Revelation", k:"계", c:22}
+    ];
+
+    const dateInput = document.getElementById('start-date');
+
+    // Robust date parsing for iOS
+    function getSafeDate(dateStr) {
+        if(!dateStr) return new Date();
+        const parts = dateStr.split('-');
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    // Initialize date value
+    let startStr = localStorage.getItem('bibleStart') || '2026-01-01';
+    dateInput.value = startStr;
+
+    function render() {
+        const list = document.getElementById('list');
+        list.innerHTML = '';
+        const startDate = getSafeDate(dateInput.value);
+        const now = new Date();
+        const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        
+        let bIdx = 0, cNum = 1, dayIdx = 0;
+
+        while (bIdx < bible.length) {
+            const currDate = new Date(startDate);
+            currDate.setDate(startDate.getDate() + dayIdx);
+            const currTs = currDate.getTime();
+            const isToday = currTs === todayTs;
+
+            const div = document.createElement('div');
+            div.className = `day-block ${isToday ? 'is-today' : ''}`;
+            if(isToday) div.id = 'today-marker';
+
+            let dateLabel = currDate.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+            let html = `<div class="date-label">${dateLabel}</div><div class="grid">`;
+            
+            for (let i = 0; i < 4 && bIdx < bible.length; i++) {
+                const book = bible[bIdx];
+                const id = `${book.n}-${cNum}`;
+                const checked = localStorage.getItem(id) === 'true';
+                html += `<div class="item" onclick="toggleItem('${id}', this)" data-ts="${currTs}">
+                    <input type="checkbox" id="${id}" ${checked?'checked':''} onchange="event.stopPropagation(); toggleItem('${id}', this.parentElement)">
+                    <span class="${checked?'done':''}"><b>${book.k}</b> <span class="eng-name">${book.n}</span> <b>${cNum}</b></span>
+                </div>`;
+                cNum++; if(cNum > book.c){ cNum=1; bIdx++; }
+            }
+            div.innerHTML = html + `</div>`;
+            list.appendChild(div);
+            dayIdx++;
+        }
+        updateProgress();
+    }
+
+    window.toggleItem = function(id, el) {
+        const cb = el.querySelector('input');
+        if (event.target.tagName !== 'INPUT') cb.checked = !cb.checked;
+        localStorage.setItem(id, cb.checked);
+        el.querySelector('span').classList.toggle('done', cb.checked);
+        updateProgress();
+    }
+
+    function updateProgress() {
+        let count = 0;
+        bible.forEach(b => {
+            for(let i=1; i<=b.c; i++) {
+                if(localStorage.getItem(`${b.n}-${i}`) === 'true') count++;
+            }
+        });
+        const pct = Math.round((count / 1189) * 100);
+        document.getElementById('prog-fill').style.width = pct + '%';
+        document.getElementById('stats').innerText = `${count.toLocaleString()} / 1,189 (${pct}%)`;
+    }
+
+    dateInput.addEventListener('change', function() {
+        localStorage.setItem('bibleStart', this.value);
+        render();
+    });
+
+    document.getElementById('today-btn').onclick = function() {
+        const el = document.getElementById('today-marker');
+        if(el) {
+            el.scrollIntoView({behavior:'smooth', block:'center'});
+        } else {
+            alert("Today is not in range.");
+        }
+    };
+
+    document.getElementById('catch-btn').onclick = function() {
+        if(!confirm("Mark past chapters as read?")) return;
+        const now = new Date();
+        const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        document.querySelectorAll('.item').forEach(item => {
+            if(parseInt(item.dataset.ts) < todayTs) {
+                const cb = item.querySelector('input');
+                cb.checked = true;
+                localStorage.setItem(cb.id, 'true');
+            }
+        });
+        render();
+    };
+
+    document.getElementById('reset-btn').onclick = function() {
+        if(confirm("Clear ALL progress?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    };
+
+    // Delay initial render slightly for iOS Safari
+    setTimeout(render, 100);
+</script>
+</body>
+</html>
