@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>성경 읽기표</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #27ae60; --today: #fff9c4; --bg: #f4f7f6; --sunday: #e74c3c; }
+        body { font-family: -apple-system, "Malgun Gothic", dotum, sans-serif; background: var(--bg); padding: 10px; margin: 0; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        header { position: sticky; top: 0; background: white; padding-bottom: 10px; border-bottom: 2px solid #eee; z-index: 100; }
+        
+        /* Progress Bar */
+        .progress-container { width: 100%; background-color: #eee; border-radius: 10px; margin: 10px 0; height: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; background-color: var(--accent); width: 0%; transition: width 0.3s ease; }
+
+        .date-container { position: relative; margin-bottom: 10px; }
+        .custom-date-input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; background: white; cursor: pointer; box-sizing: border-box; }
+        
+        /* Narrower & Right-Aligned Calendar */
+        .calendar-popup { display: none; position: absolute; top: 100%; right: 0; width: 280px; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 200; padding: 10px; box-sizing: border-box; }
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: bold; font-size: 0.9rem; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+        .cal-day-name { font-size: 0.7rem; color: #888; padding-bottom: 5px; }
+        .cal-day-name:first-child { color: var(--sunday); } 
+        .cal-date { padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+        .cal-date.selected { background: var(--accent); color: white !important; }
+        .sun-date { color: var(--sunday); }
+
+        /* Full-width Search Box */
+        input[type="text"] { width: 100%; padding: 12px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; margin-top: 5px; }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-today { background: var(--accent); }
+        .btn-catch { background: var(--primary); }
+        .btn-reset { background: transparent; color: #e74c3c; border: 1px solid #e74c3c; grid-column: span 2; margin-top: 8px; font-size: 0.8rem; }
+        
+        .day-block { padding: 12px 5px; border-bottom: 1px solid #eee; scroll-margin-top: 240px; }
+        .is-today { background: var(--today); border: 2px solid #f1c40f; border-radius: 8px; }
+        .date-label { font-size: 0.85rem; color: #7f8c8d; font-weight: bold; margin-bottom: 5px; }
+        .sun-label { color: var(--sunday); }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .item { display: flex; align-items: center; font-size: 0.85rem; background: #fafafa; padding: 8px 4px; border-radius: 6px; border: 1px solid #eee; border-left: 4px solid #3498db; }
+        .done { text-decoration: line-through; color: #bbb !important; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2 style="text-align:center; margin:0;">📖 성경 읽기표</h2>
+        <div style="text-align:center; margin-top: 10px; font-size: 0.95rem; font-weight: bold;">
+            <span id="stats">총 1,189장 중 0장 읽음 (0%)</span>
+        </div>
+        <div class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+
+        <label style="font-size:0.8rem; color:#666; font-weight:bold;">성경읽기 시작일:</label>
+        <div class="date-container">
+            <div id="custom-date-display" class="custom-date-input" onclick="toggleCalendar()">2026-01-01</div>
+            <div id="calendar-popup" class="calendar-popup">
+                <div class="cal-header">
+                    <span onclick="changeMonth(-1)" style="cursor:pointer; padding: 5px;">◀</span>
+                    <span id="cal-month-year"></span>
+                    <span onclick="changeMonth(1)" style="cursor:pointer; padding: 5px;">▶</span>
+                </div>
+                <div class="cal-grid" id="cal-grid"></div>
+            </div>
+        </div>
+
+        <input type="text" id="search" placeholder="검색 (예: 창세기, 마태)..." oninput="render()">
+        
+        <div class="controls">
+            <button class="btn-today" onclick="jumpToToday()">📍 오늘로 이동</button>
+            <button class="btn-catch" onclick="catchUp()">✅ 읽은 것으로 표기</button>
+            <button class="btn-reset" onclick="hardReset()">🗑 전부 재설정</button>
+        </div>
+    </header>
+    <div id="list"></div>
+</div>
+
+<script>
+    const bible = [
+        {k:"창세기", c:50}, {k:"출애굽기", c:40}, {k:"레위기", c:27}, {k:"민수기", c:36}, {k:"신명기", c:34},
+        {k:"여호수아", c:24}, {k:"사사기", c:21}, {k:"룻기", c:4}, {k:"사무엘상", c:31}, {k:"사무엘하", c:24},
+        {k:"열왕기상", c:22}, {k:"열왕기하", c:25}, {k:"역대상", c:29}, {k:"역대하", c:36}, {k:"에스라", c:10},
+        {k:"느헤미야", c:13}, {k:"에스더", c:10}, {k:"욥기", c:42}, {k:"시편", c:150}, {k:"잠언", c:31},
+        {k:"전도서", c:12}, {k:"아가", c:8}, {k:"이사야", c:66}, {k:"예레미야", c:52}, {k:"예레미야 애가", c:5},
+        {k:"에스겔", c:48}, {k:"다니엘", c:12}, {k:"호세아", c:14}, {k:"요엘", c:3}, {k:"아모스", c:9},
+        {k:"오바댜", c:1}, {k:"요나", c:4}, {k:"미가", c:7}, {k:"나훔", c:3}, {k:"하박국", c:3},
+        {k:"스바냐", c:3}, {k:"학개", c:2}, {k:"스가랴", c:14}, {k:"말라기", c:4}, {k:"마태복음", c:28},
+        {k:"마가복음", c:16}, {k:"누가복음", c:24}, {k:"요한복음", c:21}, {k:"사도행전", c:28}, {k:"로마서", c:16},
+        {k:"고린도전서", c:16}, {k:"고린도후서", c:13}, {k:"갈라디아서", c:6}, {k:"에베소서", c:6}, {k:"빌립보서", c:4},
+        {k:"골로새서", c:4}, {k:"데살로니가전서", c:5}, {k:"데살로니가후서", c:3}, {k:"디모데전서", c:6}, {k:"디모데후서", c:4},
+        {k:"디도서", c:3}, {k:"빌레몬서", c:1}, {k:"히브리서", c:13}, {k:"야고보서", c:5}, {k:"베드로전서", c:5},
+        {k:"베드로후서", c:3}, {k:"요한일서", c:5}, {k:"요한이서", c:1}, {k:"요한삼서", c:1}, {k:"유다서", c:1}, {k:"요한계시록", c:22}
+    ];
+
+    let selectedDate = new Date(localStorage.getItem('bibleStart_v2') || '2026-01-01');
+    let viewDate = new Date(selectedDate);
+
+    function toggleCalendar() {
+        const pop = document.getElementById('calendar-popup');
+        pop.style.display = pop.style.display === 'block' ? 'none' : 'block';
+        if(pop.style.display === 'block') drawCalendar();
+    }
+
+    function changeMonth(dir) {
+        viewDate.setMonth(viewDate.getMonth() + dir);
+        drawCalendar();
+    }
+
+    function selectDate(d, m, y) {
+        selectedDate = new Date(y, m, d);
+        const ymd = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        document.getElementById('custom-date-display').innerText = ymd;
+        localStorage.setItem('bibleStart_v2', ymd);
+        document.getElementById('calendar-popup').style.display = 'none';
+        render();
+    }
+
+    function drawCalendar() {
+        const grid = document.getElementById('cal-grid');
+        const title = document.getElementById('cal-month-year');
+        grid.innerHTML = '';
+        title.innerText = `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
+        ['일','월','화','수','목','금','토'].forEach(d => grid.innerHTML += `<div class="cal-day-name">${d}</div>`);
+        const first = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+        const last = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+        for(let i=0; i<first; i++) grid.innerHTML += '<div></div>';
+        for(let d=1; d<=last; d++) {
+            const dateObj = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+            const isSun = dateObj.getDay() === 0;
+            const isSel = d === selectedDate.getDate() && viewDate.getMonth() === selectedDate.getMonth() && viewDate.getFullYear() === selectedDate.getFullYear();
+            grid.innerHTML += `<div class="cal-date ${isSel?'selected':''} ${isSun?'sun-date':''}" onclick="selectDate(${d}, ${viewDate.getMonth()}, ${viewDate.getFullYear()})">${d}</div>`;
+        }
+    }
+
+    function render() {
+        const list = document.getElementById('list');
+        const searchQ = document.getElementById('search').value.toLowerCase();
+        list.innerHTML = '';
+        const todayStr = new Date().toDateString();
+        let bIdx = 0, cNum = 1, dayIdx = 0;
+
+        while (bIdx < bible.length) {
+            const currDate = new Date(selectedDate);
+            currDate.setDate(selectedDate.getDate() + dayIdx);
+            const isToday = currDate.toDateString() === todayStr;
+            const isSun = currDate.getDay() === 0;
+            let dayHtml = '';
+            let hasMatch = false;
+
+            for (let i = 0; i < 4 && bIdx < bible.length; i++) {
+                const book = bible[bIdx];
+                const id = `v2-${book.k}-${cNum}`;
+                const checked = localStorage.getItem(id) === 'true';
+                if (!searchQ || book.k.includes(searchQ)) {
+                    hasMatch = true;
+                    dayHtml += `<div class="item ${checked?'done':''}" onclick="toggle('${id}', this)" data-ts="${currDate.getTime()}">
+                        <input type="checkbox" ${checked?'checked':''} onchange="event.stopPropagation(); toggle('${id}', this.parentElement)">
+                        <span><b>${book.k}</b> ${cNum}장</span>
+                    </div>`;
+                }
+                cNum++; if(cNum > book.c){ cNum=1; bIdx++; }
+            }
+
+            if (hasMatch) {
+                const div = document.createElement('div');
+                div.className = `day-block ${isToday ? 'is-today' : ''}`;
+                if(isToday) div.id = 'today-marker';
+                div.innerHTML = `<div class="date-label ${isSun?'sun-label':''}">${currDate.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'})}</div><div class="grid">${dayHtml}</div>`;
+                list.appendChild(div);
+            }
+            dayIdx++;
+        }
+        updateProgress();
+    }
+
+    window.toggle = function(id, el) {
+        const cb = el.querySelector('input');
+        if (event.target.tagName !== 'INPUT') cb.checked = !cb.checked;
+        localStorage.setItem(id, cb.checked);
+        el.classList.toggle('done', cb.checked);
+        updateProgress();
+    }
+
+    function updateProgress() {
+        let count = 0;
+        bible.forEach(b => { for(let i=1; i<=b.c; i++) if(localStorage.getItem(`v2-${b.k}-${i}`) === 'true') count++; });
+        const pct = Math.round((count / 1189) * 100);
+        document.getElementById('stats').innerText = `총 1,189장 중 ${count.toLocaleString()}장 읽음 (${pct}%)`;
+        document.getElementById('progress-bar').style.width = pct + '%';
+    }
+
+    window.jumpToToday = () => {
+        const el = document.getElementById('today-marker');
+        if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+        else alert("오늘 날짜가 목록에 없습니다.");
+    };
+
+    window.catchUp = () => {
+        if(!confirm("오늘 이전의 모든 장을 읽은 것으로 표시할까요?")) return;
+        const todayTs = new Date().setHours(0,0,0,0);
+        document.querySelectorAll('.item').forEach(item => {
+            if(parseInt(item.dataset.ts) < todayTs) {
+                const id = item.getAttribute('onclick').match(/'([^']+)'/)[1];
+                localStorage.setItem(id, 'true');
+            }
+        });
+        render();
+    };
+
+    window.hardReset = () => { if(confirm("모든 기록을 초기화하시겠습니까?")) { localStorage.clear(); location.reload(); }};
+    document.addEventListener('click', (e) => { if(!e.target.closest('.date-container')) document.getElementById('calendar-popup').style.display = 'none'; });
+
+    render();
+</script>
+</body>
+</html>
